@@ -1,410 +1,400 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react';
 import { useProduct } from '../hooks/useProduct';
-import { useParams } from 'react-router';
+import { useParams, useNavigate } from 'react-router';
 
-// Helper icons
-const PlusIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
-const TrashIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>;
+const CATEGORIES = ['coolers','tables','chairs','cycles','books','electronics','mattresses','buckets','study lamps','extension boards','others'];
+const SELLER_YEARS = ['1st Year','2nd Year','3rd Year','4th Year','Alumni'];
+const MAX_IMAGES = 4;
 
 const SellerProductDetails = () => {
-  const [ product, setProduct ] = useState(null);
-  const [ localVariants, setLocalVariants ] = useState([]);
-  const [ isAddingVariant, setIsAddingVariant ] = useState(false);
-  const [ loading, setLoading ] = useState(true);
+    const { productId } = useParams();
+    const navigate = useNavigate();
+    const { handleGetProductById, handleUpdateProduct, handleDeleteProduct, handleMarkAsSold } = useProduct();
+    const fileInputRef = useRef(null);
 
-  // UI state for inputs to maintain focus
-  const [ attributeInputs, setAttributeInputs ] = useState([ { key: '', value: '' } ]);
+    const [product, setProduct]       = useState(null);
+    const [loading, setLoading]       = useState(true);
+    const [saving, setSaving]         = useState(false);
+    const [deleting, setDeleting]     = useState(false);
+    const [markingSold, setMarkingSold] = useState(false);
+    const [toast, setToast]           = useState(null); // { msg, type }
+    const [newImages, setNewImages]   = useState([]);   // files to upload
+    const [isDragging, setIsDragging] = useState(false);
 
-  // New variant state
-  const [ newVariant, setNewVariant ] = useState({
-    images: [],
-    stock: 0,
-    attributes: {}, // Strictly an object
-    price: { amount: '', currency: 'INR' }
-  });
+    const [formData, setFormData] = useState({
+        title: '', description: '', price: '', category: 'coolers',
+        hostelBlock: '', sellerYear: '1st Year', contactNumber: '', negotiable: false,
+    });
 
-  const { productId } = useParams();
-  const { handleGetProductById, handleAddProductVariant } = useProduct();
-
-  useEffect(() => {
-    async function fetchProductDetails() {
-      setLoading(true);
-      try {
-        const data = await handleGetProductById(productId);
-        const prod = data?.product || data;
-        setProduct(prod);
-        // Initialize variants locally
-        if (prod?.variants) {
-          setLocalVariants(prod.variants);
+    useEffect(() => {
+        async function load() {
+            setLoading(true);
+            try {
+                const data = await handleGetProductById(productId);
+                const p = data?.product || data;
+                setProduct(p);
+                if (p) {
+                    setFormData({
+                        title: p.title || '',
+                        description: p.description || '',
+                        price: p.price || '',
+                        category: p.category || 'coolers',
+                        hostelBlock: p.hostelBlock || '',
+                        sellerYear: p.sellerYear || '1st Year',
+                        contactNumber: p.contactNumber || '',
+                        negotiable: p.negotiable || false,
+                    });
+                }
+            } catch (err) {
+                console.error(err);
+                showToast('Failed to load listing.', 'error');
+            } finally {
+                setLoading(false);
+            }
         }
-      } catch (error) {
-        console.error("Failed to fetch product details", error);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchProductDetails();
-  }, [ productId, handleGetProductById ]);
+        load();
+    }, [productId, handleGetProductById]);
 
-  // Handlers for modifying existing variant stock natively
-  const handleStockChange = (index, newStock) => {
-    const updatedVariants = [ ...localVariants ];
-    updatedVariants[ index ] = { ...updatedVariants[ index ], stock: Number(newStock) };
-    setLocalVariants(updatedVariants);
-  };
-
-  // Handlers for New Variant Form
-  const handleAddNewVariant = async () => {
-    // Validate required at least one attribute to be filled
-    const hasValidAttribute = attributeInputs.some(attr => attr.key.trim() && attr.value.trim());
-    if (!hasValidAttribute) {
-      alert("At least one valid attribute is required.");
-      return;
-    }
-
-    // Maps preview URL so the variant list can display the image locally
-    const cleanImages = newVariant.images.map(img => ({ url: img.previewUrl, file: img.file }));
-
-    // Attributes is already an object in newVariant, just use it safely
-    const cleanAttributes = { ...newVariant.attributes };
-
-    const variantToSave = {
-      images: cleanImages,
-      stock: Number(newVariant.stock),
-      attributes: cleanAttributes,
-      price: newVariant.price.amount
-        ? Number(newVariant.price.amount)
-        : undefined // price is optional
+    const showToast = (msg, type = 'success') => {
+        setToast({ msg, type });
+        setTimeout(() => setToast(null), 3500);
     };
 
-    setLocalVariants([ ...localVariants, variantToSave ]);
-    setIsAddingVariant(false);
+    const handleChange = (e) => {
+        const { name, value, type, checked } = e.target;
+        setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+    };
 
-    await handleAddProductVariant(productId, variantToSave)
+    const addFiles = (files) => {
+        const existing = (product?.images?.length || 0) + newImages.length;
+        const slots = MAX_IMAGES - existing;
+        if (slots <= 0) return;
+        const toAdd = Array.from(files).slice(0, slots).map(f => ({ file: f, preview: URL.createObjectURL(f) }));
+        setNewImages(prev => [...prev, ...toAdd]);
+    };
 
-    // Reset form
-    // Note: should ideally revoke old object URLs as well to prevent memory leaks if it were a long-lived SPA
-    setAttributeInputs([ { key: '', value: '' } ]);
-    setNewVariant({
-      images: [],
-      stock: 0,
-      attributes: {},
-      price: { amount: '', currency: 'INR' }
-    });
-  };
+    const handleDrop = (e) => { e.preventDefault(); setIsDragging(false); addFiles(e.dataTransfer.files); };
+    const removeNewImage = (i) => setNewImages(prev => { const u = [...prev]; URL.revokeObjectURL(u[i].preview); u.splice(i,1); return u; });
 
-  const handleAddAttribute = () => {
-    setAttributeInputs(prev => [ ...prev, { key: '', value: '' } ]);
-  };
+    const handleSave = async (e) => {
+        e.preventDefault();
+        setSaving(true);
+        try {
+            const fd = new FormData();
+            Object.entries(formData).forEach(([k, v]) => fd.append(k, v));
+            newImages.forEach(img => fd.append('images', img.file));
+            await handleUpdateProduct(productId, fd);
+            showToast('Listing updated successfully!', 'success');
+            setNewImages([]);
+        } catch (err) {
+            showToast(err?.response?.data?.message || 'Update failed.', 'error');
+        } finally {
+            setSaving(false);
+        }
+    };
 
-  const handleAttributeChange = (index, field, value) => {
-    const updatedInputs = [ ...attributeInputs ];
-    updatedInputs[ index ][ field ] = value;
-    setAttributeInputs(updatedInputs);
+    const handleDelete = async () => {
+        if (!window.confirm('Delete this listing permanently? This cannot be undone.')) return;
+        setDeleting(true);
+        try {
+            await handleDeleteProduct(productId);
+            navigate('/dashboard');
+        } catch (err) {
+            showToast('Failed to delete listing.', 'error');
+            setDeleting(false);
+        }
+    };
 
-    // Synchronize to object format
-    const newAttrsObj = {};
-    updatedInputs.forEach(attr => {
-      if (attr.key.trim() !== '') {
-        newAttrsObj[ attr.key.trim() ] = attr.value;
-      }
-    });
-    setNewVariant(prev => ({ ...prev, attributes: newAttrsObj }));
-  };
+    const handleMarkSold = async () => {
+        if (!window.confirm('Mark this item as sold? This cannot be undone.')) return;
+        setMarkingSold(true);
+        try {
+            await handleMarkAsSold(productId);
+            showToast('Marked as sold!', 'success');
+            setProduct(p => ({ ...p, isSold: true }));
+        } catch (err) {
+            showToast('Failed to mark as sold.', 'error');
+        } finally {
+            setMarkingSold(false);
+        }
+    };
 
-  const handleRemoveAttribute = (index) => {
-    const updatedInputs = attributeInputs.filter((_, i) => i !== index);
-    setAttributeInputs(updatedInputs);
-
-    // Synchronize to object format
-    const newAttrsObj = {};
-    updatedInputs.forEach(attr => {
-      if (attr.key.trim() !== '') {
-        newAttrsObj[ attr.key.trim() ] = attr.value;
-      }
-    });
-    setNewVariant(prev => ({ ...prev, attributes: newAttrsObj }));
-  };
-
-  const handleImageUpload = (e) => {
-    const files = Array.from(e.target.files);
-    if (!files.length) return;
-
-    const availableSlots = 7 - newVariant.images.length;
-    const filesToAdd = files.slice(0, availableSlots);
-
-    if (files.length > availableSlots) {
-      alert(`You can only upload up to 7 images. ${filesToAdd.length} added.`);
-    }
-
-    const newImageObjects = filesToAdd.map(file => ({
-      file,
-      previewUrl: URL.createObjectURL(file)
-    }));
-
-    setNewVariant(prev => ({
-      ...prev,
-      images: [ ...prev.images, ...newImageObjects ]
-    }));
-
-    // Clear the input so identical files can be selected again if needed
-    e.target.value = '';
-  };
-
-  const handleRemoveImage = (index) => {
-    const imageToRemove = newVariant.images[ index ];
-    if (imageToRemove?.previewUrl) {
-      URL.revokeObjectURL(imageToRemove.previewUrl);
-    }
-    const updatedImages = newVariant.images.filter((_, i) => i !== index);
-    setNewVariant(prev => ({ ...prev, images: updatedImages }));
-  };
-
-  if (loading) {
-    return <div className="min-h-screen bg-[#fbf9f6] flex items-center justify-center text-[#1b1c1a] font-serif">Loading gallery...</div>;
-  }
-
-  if (!product) {
-    return <div className="min-h-screen bg-[#fbf9f6] flex items-center justify-center text-[#1b1c1a] font-serif">Product Not Found</div>;
-  }
-
-  return (
-    <div className="min-h-screen bg-[#fbf9f6] text-[#1b1c1a] font-sans pb-24">
-      {/* Top Banner / Header */}
-      <header className="sticky top-0 z-10 bg-[#fbf9f6]/80 backdrop-blur-md px-6 py-4 flex items-center justify-between">
-        <h1 className="font-serif text-xl tracking-wide uppercase">{product.title?.substring(0, 20)}{product.title?.length > 20 ? '...' : ''}</h1>
-      </header>
-
-      <main className="max-w-6xl mx-auto px-4 md:px-8 mt-8">
-
-        {/* Base Product Info */}
-        <section className="flex flex-col md:flex-row gap-8 mb-16">
-          <div className="w-full md:w-1/2">
-            {/* Gallery placeholder */}
-            <div className="w-full aspect-[4/5] bg-[#f5f3f0] overflow-hidden">
-              {product.images && product.images.length > 0 ? (
-                <img src={product.images[ 0 ].url} alt={product.title} className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-[#7f7668]">No Image</div>
-              )}
+    if (loading) return (
+        <div style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#FAFAFA' }}>
+            <div style={{ textAlign: 'center' }}>
+                <div style={{
+                    width: 44, height: 44, border: '3px solid #E0E7FF', borderTopColor: '#4F46E5',
+                    borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 16px',
+                }} />
+                <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+                <p style={{ fontFamily: 'Inter', color: '#9CA3AF', fontWeight: 500 }}>Loading your listing…</p>
             </div>
-            {/* Thumbnails */}
-            {product.images && product.images.length > 1 && (
-              <div className="flex gap-2 mt-2 overflow-x-auto">
-                {product.images.slice(1).map((img, i) => (
-                  <img key={i} src={img.url} alt={`Thumb ${i}`} className="w-16 h-20 object-cover bg-[#f5f3f0] shrink-0" />
-                ))}
-              </div>
-            )}
-          </div>
+        </div>
+    );
 
-          <div className="w-full md:w-1/2 flex flex-col justify-center">
-            <h2 className="font-serif text-4xl md:text-5xl leading-tight mb-4 uppercase">{product.title}</h2>
-            <p className="text-[#6e6258] text-lg mb-6 leading-relaxed max-w-md">{product.description}</p>
-            <div className="text-2xl tracking-wide font-light mb-8">
-              {product.price?.amount} {product.price?.currency}
+    if (!product) return (
+        <div style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>🚫</div>
+                <p style={{ fontFamily: 'Inter', fontWeight: 700, fontSize: 18, color: '#111827' }}>Listing not found</p>
+                <button onClick={() => navigate('/dashboard')} style={{ marginTop: 16, color: '#4F46E5', background: 'none', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: 14 }}>← Back to Dashboard</button>
             </div>
-          </div>
-        </section>
+        </div>
+    );
 
-        {/* Variants & Inventory */}
-        <section className="bg-[#f5f3f0] p-6 md:p-12">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
-            <h3 className="font-serif text-3xl uppercase">Variants & Inventory</h3>
-            {!isAddingVariant && (
-              <button
-                onClick={() => setIsAddingVariant(true)}
-                className="bg-[#745a27] text-[#ffffff] px-6 py-3 uppercase tracking-wider text-sm hover:bg-[#5a4312] transition-colors flex items-center gap-2 cursor-pointer"
-              >
-                <PlusIcon /> Add New Variant
-              </button>
+    const totalImages = (product.images?.length || 0) + newImages.length;
+
+    return (
+        <div style={{ fontFamily: 'Inter, sans-serif', background: '#FAFAFA', minHeight: '100vh', paddingBottom: 80, paddingTop: 100 }}>
+            {/* Toast */}
+            {toast && (
+                <div style={{
+                    position: 'fixed', bottom: 28, left: '50%', transform: 'translateX(-50%)',
+                    zIndex: 9999, background: toast.type === 'error' ? '#FEF2F2' : '#F0FDF4',
+                    border: `1px solid ${toast.type === 'error' ? '#FECACA' : '#BBF7D0'}`,
+                    color: toast.type === 'error' ? '#B91C1C' : '#15803D',
+                    padding: '12px 24px', borderRadius: 14, fontWeight: 700, fontSize: 14,
+                    boxShadow: '0 8px 28px rgba(0,0,0,0.12)', whiteSpace: 'nowrap',
+                    animation: 'slideUp 0.3s ease',
+                }}>
+                    <style>{`@keyframes slideUp{from{opacity:0;transform:translateX(-50%) translateY(12px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}`}</style>
+                    {toast.type === 'error' ? '⚠️' : '✅'} {toast.msg}
+                </div>
             )}
-          </div>
 
-          {/* Add New Variant Form */}
-          {isAddingVariant && (
-            <div className="bg-[#ffffff] p-6 md:p-8 mb-12 shadow-[0_20px_40px_rgba(27,28,26,0.04)]">
-              <div className="flex justify-between items-center mb-6">
-                <h4 className="font-serif text-xl uppercase">Create Variant</h4>
-                <button
-                  onClick={() => setIsAddingVariant(false)}
-                  className="text-[#7f7668] hover:text-[#1b1c1a] text-sm uppercase tracking-wider cursor-pointer"
-                >
-                  Cancel
-                </button>
-              </div>
+            <div style={{ maxWidth: 860, margin: '0 auto', padding: '40px 24px 0' }}>
+                {/* Header */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 32 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                        <button onClick={() => navigate('/dashboard')} style={{
+                            background: '#F1F5F9', border: 'none', borderRadius: 10, width: 38, height: 38,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            cursor: 'pointer', fontSize: 18, color: '#374151',
+                        }}>←</button>
+                        <div>
+                            <h1 style={{ fontFamily: '"Plus Jakarta Sans", Inter', fontWeight: 800, fontSize: 22, color: '#0D0F1A', margin: 0 }}>
+                                Edit Listing
+                            </h1>
+                            <p style={{ color: '#9CA3AF', fontSize: 13, fontWeight: 500, margin: '2px 0 0' }}>
+                                Changes will be live immediately
+                            </p>
+                        </div>
+                    </div>
+                    {product.isSold && (
+                        <span style={{ background: '#FEE2E2', color: '#B91C1C', padding: '5px 14px', borderRadius: 999, fontWeight: 800, fontSize: 12, border: '1px solid #FECACA' }}>
+                            SOLD
+                        </span>
+                    )}
+                </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {/* Form Left Col: Attributes & Basics */}
-                <div className="space-y-6">
+                <form onSubmit={handleSave}>
+                    {/* Current Images */}
+                    <div style={{ background: '#fff', borderRadius: 18, border: '1px solid #E5E7EB', padding: '24px', marginBottom: 16 }}>
+                        <h2 style={{ fontWeight: 700, fontSize: 15, color: '#111827', marginBottom: 16, marginTop: 0 }}>
+                            Current Photos
+                            <span style={{ fontWeight: 500, color: '#9CA3AF', fontSize: 13, marginLeft: 8 }}>({product.images?.length || 0} uploaded)</span>
+                        </h2>
+                        {product.images?.length > 0 ? (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+                                {product.images.map((img, i) => (
+                                    <div key={i} style={{ borderRadius: 10, overflow: 'hidden', aspectRatio: '1', background: '#F1F5F9' }}>
+                                        <img src={img.url} alt={`Photo ${i+1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <p style={{ color: '#9CA3AF', fontSize: 13 }}>No photos uploaded yet.</p>
+                        )}
 
-                  {/* Dynamic Attributes */}
-                  <div>
-                    <label className="block text-sm uppercase tracking-wider text-[#6e6258] mb-3">Attributes (e.g. Size, Color) *</label>
-                    <div className="space-y-3">
-                      {attributeInputs.map((attr, index) => (
-                        <div key={index} className="flex gap-2 items-center">
-                          <input
-                            type="text"
-                            placeholder="Key (e.g., Size)"
-                            value={attr.key}
-                            onChange={(e) => handleAttributeChange(index, 'key', e.target.value)}
-                            className="w-1/2 bg-transparent border-b border-[#d0c5b5] py-2 focus:outline-none focus:border-[#745a27] placeholder:text-[#d0c5b5]"
-                          />
-                          <input
-                            type="text"
-                            placeholder="Value (e.g., M)"
-                            value={attr.value}
-                            onChange={(e) => handleAttributeChange(index, 'value', e.target.value)}
-                            className="w-1/2 bg-transparent border-b border-[#d0c5b5] py-2 focus:outline-none focus:border-[#745a27] placeholder:text-[#d0c5b5]"
-                          />
-                          {attributeInputs.length > 1 && (
-                            <button onClick={() => handleRemoveAttribute(index)} className="text-[#ba1a1a] p-2 hover:bg-[#ffdad6] transition-colors cursor-pointer">
-                              <TrashIcon />
+                        {/* Add more photos */}
+                        {totalImages < MAX_IMAGES && (
+                            <div style={{ marginTop: 16 }}>
+                                <p style={{ fontWeight: 600, fontSize: 13, color: '#374151', marginBottom: 8 }}>
+                                    Add more photos ({MAX_IMAGES - totalImages} slots left)
+                                </p>
+                                <div
+                                    onDrop={handleDrop}
+                                    onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
+                                    onDragLeave={() => setIsDragging(false)}
+                                    onClick={() => fileInputRef.current?.click()}
+                                    style={{
+                                        border: `2px dashed ${isDragging ? '#4F46E5' : '#D1D5DB'}`,
+                                        borderRadius: 12, padding: '16px 12px',
+                                        textAlign: 'center', cursor: 'pointer',
+                                        background: isDragging ? '#EEF2FF' : '#F9FAFB',
+                                        transition: 'all 0.2s',
+                                    }}
+                                >
+                                    <p style={{ color: '#6B7280', fontSize: 13, fontWeight: 500, margin: 0 }}>Click or drag to add photos</p>
+                                    <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={e => { addFiles(e.target.files); e.target.value=''; }} style={{ display: 'none' }} />
+                                </div>
+                                {newImages.length > 0 && (
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginTop: 10 }}>
+                                        {newImages.map((img, i) => (
+                                            <div key={i} style={{ position: 'relative', borderRadius: 10, overflow: 'hidden', aspectRatio: '1', background: '#F1F5F9' }}>
+                                                <img src={img.preview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                <button type="button" onClick={() => removeNewImage(i)} style={{
+                                                    position: 'absolute', top: 4, right: 4, background: 'rgba(255,255,255,0.9)',
+                                                    border: 'none', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer',
+                                                    color: '#EF4444', fontWeight: 700, fontSize: 14, lineHeight: 1,
+                                                }}>×</button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Form Fields */}
+                    <div style={{ background: '#fff', borderRadius: 18, border: '1px solid #E5E7EB', padding: '24px', marginBottom: 16 }}>
+                        <h2 style={{ fontWeight: 700, fontSize: 15, color: '#111827', marginBottom: 20, marginTop: 0 }}>Listing Details</h2>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 18 }}>
+                            {/* Title */}
+                            <div>
+                                <label style={{ display: 'block', fontWeight: 700, fontSize: 13, color: '#374151', marginBottom: 6 }}>Ad Title *</label>
+                                <input
+                                    type="text" name="title" required value={formData.title} onChange={handleChange}
+                                    placeholder="e.g. Symphony Jumbo Cooler 75L"
+                                    style={{ width: '100%', padding: '11px 14px', borderRadius: 10, border: '1px solid #D1D5DB', fontFamily: 'Inter', fontSize: 14, outline: 'none', boxSizing: 'border-box', background: '#F9FAFB' }}
+                                    onFocus={e => e.target.style.borderColor = '#4F46E5'}
+                                    onBlur={e => e.target.style.borderColor = '#D1D5DB'}
+                                />
+                            </div>
+
+                            {/* Price + Category */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                                <div>
+                                    <label style={{ display: 'block', fontWeight: 700, fontSize: 13, color: '#374151', marginBottom: 6 }}>Price (₹) *</label>
+                                    <input
+                                        type="number" name="price" required value={formData.price} onChange={handleChange} placeholder="0"
+                                        style={{ width: '100%', padding: '11px 14px', borderRadius: 10, border: '1px solid #D1D5DB', fontFamily: 'Inter', fontSize: 14, outline: 'none', boxSizing: 'border-box', background: '#F9FAFB' }}
+                                        onFocus={e => e.target.style.borderColor = '#4F46E5'}
+                                        onBlur={e => e.target.style.borderColor = '#D1D5DB'}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontWeight: 700, fontSize: 13, color: '#374151', marginBottom: 6 }}>Category *</label>
+                                    <select
+                                        name="category" value={formData.category} onChange={handleChange}
+                                        style={{ width: '100%', padding: '11px 14px', borderRadius: 10, border: '1px solid #D1D5DB', fontFamily: 'Inter', fontSize: 14, outline: 'none', background: '#F9FAFB', boxSizing: 'border-box' }}
+                                    >
+                                        {CATEGORIES.map(c => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* Hostel Block + Year */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                                <div>
+                                    <label style={{ display: 'block', fontWeight: 700, fontSize: 13, color: '#374151', marginBottom: 6 }}>Hostel Block / Room *</label>
+                                    <input
+                                        type="text" name="hostelBlock" required value={formData.hostelBlock} onChange={handleChange} placeholder="Block C, 204"
+                                        style={{ width: '100%', padding: '11px 14px', borderRadius: 10, border: '1px solid #D1D5DB', fontFamily: 'Inter', fontSize: 14, outline: 'none', boxSizing: 'border-box', background: '#F9FAFB' }}
+                                        onFocus={e => e.target.style.borderColor = '#4F46E5'}
+                                        onBlur={e => e.target.style.borderColor = '#D1D5DB'}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontWeight: 700, fontSize: 13, color: '#374151', marginBottom: 6 }}>Your Year *</label>
+                                    <select
+                                        name="sellerYear" value={formData.sellerYear} onChange={handleChange}
+                                        style={{ width: '100%', padding: '11px 14px', borderRadius: 10, border: '1px solid #D1D5DB', fontFamily: 'Inter', fontSize: 14, outline: 'none', background: '#F9FAFB', boxSizing: 'border-box' }}
+                                    >
+                                        {SELLER_YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* WhatsApp */}
+                            <div>
+                                <label style={{ display: 'block', fontWeight: 700, fontSize: 13, color: '#374151', marginBottom: 6 }}>WhatsApp Number *</label>
+                                <input
+                                    type="tel" name="contactNumber" required value={formData.contactNumber} onChange={handleChange} placeholder="10-digit mobile number"
+                                    style={{ width: '100%', padding: '11px 14px', borderRadius: 10, border: '1px solid #D1D5DB', fontFamily: 'Inter', fontSize: 14, outline: 'none', boxSizing: 'border-box', background: '#F9FAFB' }}
+                                    onFocus={e => e.target.style.borderColor = '#4F46E5'}
+                                    onBlur={e => e.target.style.borderColor = '#D1D5DB'}
+                                />
+                            </div>
+
+                            {/* Description */}
+                            <div>
+                                <label style={{ display: 'block', fontWeight: 700, fontSize: 13, color: '#374151', marginBottom: 6 }}>Description *</label>
+                                <textarea
+                                    name="description" required rows={4} value={formData.description} onChange={handleChange}
+                                    placeholder="Describe the condition, age, reason for selling…"
+                                    style={{ width: '100%', padding: '11px 14px', borderRadius: 10, border: '1px solid #D1D5DB', fontFamily: 'Inter', fontSize: 14, outline: 'none', resize: 'none', boxSizing: 'border-box', background: '#F9FAFB' }}
+                                    onFocus={e => e.target.style.borderColor = '#4F46E5'}
+                                    onBlur={e => e.target.style.borderColor = '#D1D5DB'}
+                                />
+                            </div>
+
+                            {/* Negotiable */}
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }}>
+                                <input
+                                    type="checkbox" name="negotiable" checked={formData.negotiable} onChange={handleChange}
+                                    style={{ width: 18, height: 18, accentColor: '#4F46E5' }}
+                                />
+                                <span style={{ fontWeight: 600, fontSize: 14, color: '#374151' }}>Price is Negotiable</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                        {/* Save */}
+                        <button
+                            type="submit"
+                            disabled={saving}
+                            style={{
+                                flex: 1, minWidth: 160, padding: '13px 24px',
+                                background: saving ? '#9CA3AF' : '#4F46E5',
+                                color: '#fff', border: 'none', borderRadius: 12,
+                                fontFamily: 'Inter', fontWeight: 700, fontSize: 15,
+                                cursor: saving ? 'not-allowed' : 'pointer',
+                                boxShadow: saving ? 'none' : '0 4px 14px rgba(79,70,229,0.3)',
+                                transition: 'all 0.2s',
+                            }}
+                        >
+                            {saving ? 'Saving…' : '💾 Save Changes'}
+                        </button>
+
+                        {/* Mark as Sold */}
+                        {!product.isSold && (
+                            <button
+                                type="button"
+                                onClick={handleMarkSold}
+                                disabled={markingSold}
+                                style={{
+                                    padding: '13px 20px', background: '#F0FDF4',
+                                    color: '#15803D', border: '1px solid #BBF7D0',
+                                    borderRadius: 12, fontFamily: 'Inter', fontWeight: 700, fontSize: 14,
+                                    cursor: markingSold ? 'not-allowed' : 'pointer', transition: 'all 0.2s',
+                                }}
+                            >
+                                {markingSold ? 'Updating…' : '✓ Mark as Sold'}
                             </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                    <button
-                      onClick={handleAddAttribute}
-                      className="mt-3 text-[#745a27] text-sm uppercase tracking-wider flex items-center gap-1 hover:text-[#5a4312] cursor-pointer"
-                    >
-                      <PlusIcon /> Add Attribute
-                    </button>
-                  </div>
+                        )}
 
-                  {/* Stock & Price */}
-                  <div className="flex gap-4">
-                    <div className="w-1/2">
-                      <label className="block text-sm uppercase tracking-wider text-[#6e6258] mb-2">Initial Stock</label>
-                      <input
-                        type="number"
-                        value={newVariant.stock}
-                        onChange={(e) => setNewVariant({ ...newVariant, stock: e.target.value })}
-                        className="w-full bg-transparent border-b border-[#d0c5b5] py-2 focus:outline-none focus:border-[#745a27]"
-                      />
+                        {/* Delete */}
+                        <button
+                            type="button"
+                            onClick={handleDelete}
+                            disabled={deleting}
+                            style={{
+                                padding: '13px 20px', background: '#FEF2F2',
+                                color: '#B91C1C', border: '1px solid #FECACA',
+                                borderRadius: 12, fontFamily: 'Inter', fontWeight: 700, fontSize: 14,
+                                cursor: deleting ? 'not-allowed' : 'pointer', transition: 'all 0.2s',
+                            }}
+                        >
+                            {deleting ? 'Deleting…' : '🗑️ Delete Listing'}
+                        </button>
                     </div>
-                    <div className="w-1/2">
-                      <label className="block text-sm uppercase tracking-wider text-[#6e6258] mb-2">Price Amount (Optional)</label>
-                      <input
-                        type="number"
-                        value={newVariant.price.amount}
-                        onChange={(e) => setNewVariant({ ...newVariant, price: { ...newVariant.price, amount: e.target.value } })}
-                        placeholder="Default if empty"
-                        className="w-full bg-transparent border-b border-[#d0c5b5] py-2 focus:outline-none focus:border-[#745a27] placeholder:text-[#d0c5b5]"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Form Right Col: Images */}
-                <div>
-                  <div className="flex justify-between items-end mb-3">
-                    <label className="block text-sm uppercase tracking-wider text-[#6e6258]">Image Upload (Max 7, Optional)</label>
-                    <span className="text-xs text-[#7f7668]">{newVariant.images.length}/7</span>
-                  </div>
-
-                  {newVariant.images.length > 0 && (
-                    <div className="grid grid-cols-3 gap-2 mb-4">
-                      {newVariant.images.map((img, index) => (
-                        <div key={index} className="relative aspect-[4/5] bg-[#f5f3f0]">
-                          <img src={img.previewUrl} alt="Preview" className="w-full h-full object-cover" />
-                          <button
-                            onClick={() => handleRemoveImage(index)}
-                            className="absolute top-1 right-1 bg-white/80 p-1 text-[#ba1a1a] hover:bg-white transition-colors cursor-pointer"
-                          >
-                            <TrashIcon />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {newVariant.images.length < 7 && (
-                    <div>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        onChange={handleImageUpload}
-                        className="block w-full text-sm text-[#6e6258]
-                          file:mr-4 file:py-2 file:px-4
-                          file:border-0 file:bg-[#f5f3f0] file:text-[#1b1c1a]
-                          hover:file:bg-[#e4e2df] file:cursor-pointer file:uppercase file:text-xs file:tracking-wider file:font-serif
-                          cursor-pointer"
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="mt-10 flex justify-end">
-                <button
-                  onClick={handleAddNewVariant}
-                  className="bg-gradient-to-r from-[#745a27] to-[#c9a96e] text-[#ffffff] px-8 py-3 uppercase tracking-wider text-sm hover:opacity-90 transition-opacity cursor-pointer"
-                >
-                  Save Variant
-                </button>
-              </div>
+                </form>
             </div>
-          )}
+        </div>
+    );
+};
 
-          {/* Variants List */}
-          {localVariants.length === 0 ? (
-            <div className="py-12 text-center text-[#6e6258]">
-              <p>No variants have been created yet.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-              {localVariants.map((variant, idx) => (
-                <div key={idx} className="bg-[#ffffff] flex flex-col pt-4 shadow-[0_20px_40px_rgba(27,28,26,0.02)]">
-                  <div className="px-6 flex gap-4 h-24 mb-4">
-                    {/* Variant Thumb */}
-                    <div className="w-16 h-20 bg-[#f5f3f0] shrink-0">
-                      {variant.images && variant.images.length > 0 ? (
-                        <img src={variant.images[ 0 ].url} alt="Variant" className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-xs text-[#7f7668]">N/A</div>
-                      )}
-                    </div>
-                    {/* Attributes */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap gap-2 mb-2">
-                        {Object.entries(variant.attributes || {}).map(([ key, val ]) => (
-                          <span key={key} className="bg-[#f5f3f0] px-2 py-1 text-xs uppercase tracking-wider text-[#4d463a]">
-                            <span className="text-[#a8a094]">{key}:</span> {val}
-                          </span>
-                        ))}
-                      </div>
-                      <div className="text-sm font-light">
-                        {variant.price?.amount ? `${variant.price.amount} ${variant.price.currency}` : 'Base Price'}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Stock Management Row */}
-                  <div className="mt-auto border-t border-[#f5f3f0] bg-[#fbf9f6] flex items-center px-6 py-3 justify-between">
-                    <label className="text-sm text-[#6e6258] uppercase tracking-wider">Current Stock</label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        value={variant.stock || 0}
-                        onChange={(e) => handleStockChange(idx, e.target.value)}
-                        className="w-20 bg-transparent border-b border-[#d0c5b5] py-1 text-right focus:outline-none focus:border-[#745a27] font-serif text-lg"
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-        </section>
-
-      </main>
-    </div>
-  )
-}
-
-export default SellerProductDetails
+export default SellerProductDetails;

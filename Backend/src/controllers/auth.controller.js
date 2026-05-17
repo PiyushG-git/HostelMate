@@ -159,6 +159,8 @@ export const addToWatchlist = async (req, res) => {
         user.watchlist.push(productId);
         await user.save();
 
+        await user.populate('watchlist');
+
         return res.status(200).json({ success: true, message: "Added to watchlist", watchlist: user.watchlist });
     } catch (error) {
         console.error(error);
@@ -174,6 +176,8 @@ export const removeFromWatchlist = async (req, res) => {
         const user = await userModel.findById(userId);
         user.watchlist = user.watchlist.filter(id => id.toString() !== productId);
         await user.save();
+
+        await user.populate('watchlist');
 
         return res.status(200).json({ success: true, message: "Removed from watchlist", watchlist: user.watchlist });
     } catch (error) {

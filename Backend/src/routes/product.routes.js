@@ -29,7 +29,7 @@ router.get("/detail/:id", getProductDetails);
 router.patch("/:id/sold", authenticateUser, markAsSold);
 
 /** @route PUT /api/products/:id — Edit listing (Private, Owner) */
-router.put("/:id", authenticateUser, updateProduct);
+router.put("/:id", authenticateUser, upload.array('images', 7), updateProduct);
 
 /** @route DELETE /api/products/:id — Delete listing (Private, Owner) */
 router.delete("/:id", authenticateUser, deleteProduct);

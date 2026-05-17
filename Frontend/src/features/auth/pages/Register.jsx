@@ -149,21 +149,6 @@ const Register = () => {
                             />
                         </div>
 
-                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                            <label className="flex items-center gap-3 cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    name="isSeller"
-                                    checked={formData.isSeller}
-                                    onChange={handleChange}
-                                    className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                                />
-                                <div className="flex flex-col">
-                                    <span className="text-sm font-bold text-slate-900">Register as Seller</span>
-                                    <span className="text-xs text-slate-500">I want to list items for sale</span>
-                                </div>
-                            </label>
-                        </div>
 
                         {errorMsg && (
                             <div className="p-4 bg-red-50 border border-red-100 rounded-xl flex items-start gap-3">

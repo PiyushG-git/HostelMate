@@ -39,7 +39,10 @@ export async function markProductAsSold(productId) {
 }
 
 export async function updateProduct(productId, data) {
-    const response = await productApiInstance.put(`/${productId}`, data)
+    const isFormData = data instanceof FormData;
+    const response = await productApiInstance.put(`/${productId}`, data, {
+        headers: isFormData ? { 'Content-Type': 'multipart/form-data' } : {}
+    })
     return response.data
 }
 

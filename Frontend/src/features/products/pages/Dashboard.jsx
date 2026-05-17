@@ -55,8 +55,8 @@ const Dashboard = () => {
     const soldCount = sellerProducts?.filter(p => p.isSold).length || 0;
 
     return (
-        <div className="min-h-screen bg-slate-50 font-['Inter'] pb-24">
-            <div className="max-w-5xl mx-auto px-6 lg:px-12 pt-12">
+        <div className="min-h-screen bg-slate-50 font-['Inter'] pb-24 pt-[100px]">
+            <div className="max-w-5xl mx-auto px-6 lg:px-12 pt-4">
 
                 {/* Header */}
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-10">
@@ -118,53 +118,53 @@ const Dashboard = () => {
                             return (
                                 <div
                                     key={product._id}
-                                    className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm flex flex-col"
+                                    className="bg-white rounded-[20px] border border-slate-200/60 overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_40px_rgba(79,70,229,0.08)] flex flex-col transition-all duration-300 hover:-translate-y-1"
                                 >
                                     <div
-                                        className="h-44 overflow-hidden relative bg-slate-100 cursor-pointer"
+                                        className="h-44 overflow-hidden relative bg-slate-50 cursor-pointer group"
                                         onClick={() => navigate(`/product/${product._id}`)}
                                     >
-                                        <img src={imageUrl} alt={product.title} className="w-full h-full object-cover" />
+                                        <img src={imageUrl} alt={product.title} className="w-full h-full object-contain p-4 group-hover:scale-105 transition-transform duration-500" />
                                         {product.isSold && (
-                                            <div className="absolute inset-0 bg-white/75 backdrop-blur-sm flex items-center justify-center">
-                                                <span className="bg-red-100 text-red-700 px-4 py-1.5 rounded-full font-bold text-sm border border-red-200">SOLD</span>
+                                            <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] flex items-center justify-center">
+                                                <span className="bg-red-50 text-red-700 px-5 py-2 rounded-full font-bold text-sm border border-red-200 shadow-sm">SOLD</span>
                                             </div>
                                         )}
                                     </div>
 
-                                    <div className="p-4 flex-1 flex flex-col">
-                                        <div className="flex justify-between items-start mb-1.5">
+                                    <div className="p-5 flex-1 flex flex-col bg-gradient-to-b from-white to-slate-50/50">
+                                        <div className="flex justify-between items-start mb-2">
                                             <h3
-                                                className="font-bold text-slate-900 line-clamp-1 flex-1 pr-2 cursor-pointer hover:text-indigo-600"
+                                                className="font-[800] font-['Fustat'] text-[17px] text-slate-900 line-clamp-1 flex-1 pr-2 cursor-pointer hover:text-indigo-600 transition-colors"
                                                 onClick={() => navigate(`/product/${product._id}`)}
                                             >
                                                 {product.title}
                                             </h3>
-                                            <span className="font-bold text-indigo-600 shrink-0">₹{product.price}</span>
+                                            <span className="font-[800] font-['Fustat'] text-indigo-600 shrink-0 text-lg">₹{product.price}</span>
                                         </div>
 
-                                        <div className="flex gap-1.5 text-xs font-medium text-slate-500 mb-4">
-                                            <span className="bg-slate-100 px-2 py-0.5 rounded-md">{product.category}</span>
-                                            <span className="bg-slate-100 px-2 py-0.5 rounded-md">{product.hostelBlock}</span>
+                                        <div className="flex gap-2 text-[11px] font-[800] uppercase tracking-wider text-slate-500 mb-5">
+                                            <span className="bg-indigo-50/50 text-indigo-700 px-2.5 py-1 rounded-md border border-indigo-100/50">{product.category}</span>
+                                            <span className="bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200/50">{product.hostelBlock}</span>
                                         </div>
 
-                                        <div className="mt-auto border-t border-slate-100 pt-3 flex gap-2">
+                                        <div className="mt-auto pt-4 flex gap-2">
                                             {!product.isSold ? (
                                                 <button
                                                     onClick={(e) => onMarkAsSold(product._id, e)}
                                                     disabled={loadingProductId === product._id}
-                                                    className="flex-1 bg-green-50 text-green-700 hover:bg-green-100 font-bold py-2 rounded-lg transition-colors text-sm border border-green-200"
+                                                    className="flex-1 bg-white text-green-600 hover:bg-green-50 font-bold py-2.5 rounded-xl transition-all text-sm border border-green-200 hover:border-green-300 shadow-sm disabled:opacity-50"
                                                 >
                                                     {loadingProductId === product._id ? 'Updating...' : '✓ Mark Sold'}
                                                 </button>
                                             ) : (
-                                                <div className="flex-1 bg-slate-50 text-slate-400 font-bold py-2 rounded-lg text-center text-sm border border-slate-200">
+                                                <div className="flex-1 bg-slate-100/50 text-slate-400 font-bold py-2.5 rounded-xl text-center text-sm border border-slate-200/50">
                                                     Sold ✓
                                                 </div>
                                             )}
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); navigate(`/dashboard/product/${product._id}`); }}
-                                                className="px-3 py-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg font-bold text-sm border border-indigo-200 transition-colors"
+                                                className="px-4 py-2.5 bg-white text-indigo-600 hover:bg-indigo-50 rounded-xl font-bold text-sm border border-indigo-200 hover:border-indigo-300 shadow-sm transition-all"
                                                 title="Edit listing"
                                             >
                                                 ✏️
@@ -172,7 +172,7 @@ const Dashboard = () => {
                                             <button
                                                 onClick={(e) => onDelete(product._id, e)}
                                                 disabled={deletingProductId === product._id}
-                                                className="px-3 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg font-bold text-sm border border-red-200 transition-colors"
+                                                className="px-4 py-2.5 bg-white text-red-600 hover:bg-red-50 rounded-xl font-bold text-sm border border-red-200 hover:border-red-300 shadow-sm transition-all disabled:opacity-50"
                                                 title="Delete listing"
                                             >
                                                 {deletingProductId === product._id ? '...' : '🗑️'}
@@ -192,7 +192,7 @@ const Dashboard = () => {
                         <p className="text-slate-500 max-w-md mx-auto mb-8">
                             {activeTab === 'sold'
                                 ? 'Items you mark as sold will appear here.'
-                                : 'Turn your unused hostel items into cash by posting an ad.'}
+                                : 'Turn your unused hostel items into cash by listing them here.'}
                         </p>
                         <button
                             onClick={() => navigate('/post-ad')}

@@ -7,6 +7,11 @@ import cors from "cors";
 import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20"
 import { config } from "./config/config.js";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 
@@ -31,11 +36,15 @@ passport.use(new GoogleStrategy({
     return done(null, profile);
 }))
 
-app.get("/", (_req, res) => {
-    res.status(200).json({ message: "Server is running" });
-});
+// Serve the static React frontend
+app.use(express.static(path.join(__dirname, '..', 'dist')))
 
 app.use("/api/auth", authRouter);
 app.use("/api/products", productRouter);
+
+// Catch-all route for Express v5 to serve React's index.html for client-side routing
+app.use('*name', (req, res) => {
+    res.sendFile(path.resolve(__dirname, '..', 'dist', 'index.html'))
+})
 
 export default app;

@@ -123,15 +123,33 @@ export async function updateProduct(req, res) {
     const { title, description, price, hostelBlock, sellerYear, contactNumber, negotiable } = req.body;
 
     try {
-        const product = await productModel.findOneAndUpdate(
-            { _id: id, sellerId: userId },
-            { title, description, price: Number(price), hostelBlock, sellerYear, contactNumber, negotiable: negotiable === 'true' || negotiable === true },
-            { new: true, runValidators: true }
-        );
-
+        const product = await productModel.findOne({ _id: id, sellerId: userId });
         if (!product) {
             return res.status(404).json({ success: false, message: "Product not found or unauthorized" });
         }
+
+        let newImages = [];
+        if (req.files && req.files.length > 0) {
+            newImages = await Promise.all(req.files.map(async (file) => {
+                return await uploadFile({
+                    buffer: file.buffer,
+                    fileName: file.originalname
+                });
+            }));
+        }
+
+        const updatedImages = [...product.images, ...newImages];
+
+        product.title = title || product.title;
+        product.description = description || product.description;
+        product.price = price ? Number(price) : product.price;
+        product.hostelBlock = hostelBlock || product.hostelBlock;
+        product.sellerYear = sellerYear || product.sellerYear;
+        product.contactNumber = contactNumber || product.contactNumber;
+        product.negotiable = negotiable !== undefined ? (negotiable === 'true' || negotiable === true) : product.negotiable;
+        product.images = updatedImages;
+
+        await product.save();
 
         return res.status(200).json({ success: true, message: "Listing updated", product });
     } catch (error) {
