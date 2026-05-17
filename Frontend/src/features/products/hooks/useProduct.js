@@ -1,6 +1,6 @@
-import { createProduct, getSellerProduct, getAllProducts, getProductById, addProductVariant } from "../service/product.api"
+import { createProduct, getSellerProduct, getAllProducts, getProductById, markProductAsSold, updateProduct, deleteProduct, getWatchlist, addToWatchlist, removeFromWatchlist } from "../service/product.api"
 import { useDispatch } from "react-redux"
-import { setSellerProducts, setProducts } from "../state/product.slice"
+import { setSellerProducts, setProducts, setWatchlist } from "../state/product.slice"
 import { useCallback } from "react"
 
 
@@ -19,9 +19,8 @@ export const useProduct = () => {
         return data.products
     }, [dispatch])
 
-    const handleGetAllProducts = useCallback(async () => {
-
-        const data = await getAllProducts()
+    const handleGetAllProducts = useCallback(async ({ category, search } = {}) => {
+        const data = await getAllProducts({ category, search })
         dispatch(setProducts(data.products))
     }, [dispatch])
 
@@ -30,12 +29,48 @@ export const useProduct = () => {
         return data.product
     }, [])
 
-    const handleAddProductVariant = useCallback(async (productId, newProductVariant) => {
-        const data = await addProductVariant(productId, newProductVariant)
-
-        return data
+    const handleMarkAsSold = useCallback(async (productId) => {
+        return await markProductAsSold(productId)
     }, [])
 
-    return { handleCreateProduct, handleGetSellerProduct, handleGetAllProducts, handleGetProductById ,handleAddProductVariant}
+    const handleUpdateProduct = useCallback(async (productId, formData) => {
+        const data = await updateProduct(productId, formData)
+        return data.product
+    }, [])
+
+    const handleDeleteProduct = useCallback(async (productId) => {
+        return await deleteProduct(productId)
+    }, [])
+
+    const handleGetWatchlist = useCallback(async () => {
+        const data = await getWatchlist()
+        dispatch(setWatchlist(data.watchlist))
+        return data.watchlist
+    }, [dispatch])
+
+    const handleAddToWatchlist = useCallback(async (productId) => {
+        const data = await addToWatchlist(productId)
+        dispatch(setWatchlist(data.watchlist))
+        return data.watchlist
+    }, [dispatch])
+
+    const handleRemoveFromWatchlist = useCallback(async (productId) => {
+        const data = await removeFromWatchlist(productId)
+        dispatch(setWatchlist(data.watchlist))
+        return data.watchlist
+    }, [dispatch])
+
+    return {
+        handleCreateProduct,
+        handleGetSellerProduct,
+        handleGetAllProducts,
+        handleGetProductById,
+        handleMarkAsSold,
+        handleUpdateProduct,
+        handleDeleteProduct,
+        handleGetWatchlist,
+        handleAddToWatchlist,
+        handleRemoveFromWatchlist,
+    }
 
 }

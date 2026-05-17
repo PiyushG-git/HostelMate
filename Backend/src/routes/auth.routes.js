@@ -1,20 +1,17 @@
 import { Router } from "express";
 import { validateRegisterUser, validateLoginUser } from "../validator/auth.validator.js";
-import { getMe, googleCallback, login, logout, register } from "../controllers/auth.controller.js";
+import { getMe, googleCallback, login, logout, register, addToWatchlist, removeFromWatchlist, getWatchlist } from "../controllers/auth.controller.js";
 import passport from "passport";
 import { config } from "../config/config.js";
 import { authenticateUser } from "../middlewares/auth.middleware.js";
 
 const router = Router();
 
-
-
 router.post('/register', validateRegisterUser, register)
 
 router.post("/login", validateLoginUser, login)
 
-
-// /api/auth/google
+// Google OAuth
 router.get("/google",
     passport.authenticate("google", { scope: [ "profile", "email" ] }))
 
@@ -26,20 +23,19 @@ router.get("/google/callback",
     googleCallback,
 )
 
-
-/**
- * @route GET /api/auth/me
- * @description Get the authenticated user's profile
- * @access Private
- */
+/** @route GET /api/auth/me — Get authenticated user profile (Private) */
 router.get('/me', authenticateUser, getMe)
 
-
-/**
- * @route POST /api/auth/logout
- * @description Logout the current user and blacklist their token
- * @access Private
- */
+/** @route POST /api/auth/logout — Logout (Private) */
 router.post('/logout', authenticateUser, logout)
+
+/** @route GET /api/auth/watchlist — Get user's watchlist (Private) */
+router.get('/watchlist', authenticateUser, getWatchlist)
+
+/** @route POST /api/auth/watchlist/:productId — Add to watchlist (Private) */
+router.post('/watchlist/:productId', authenticateUser, addToWatchlist)
+
+/** @route DELETE /api/auth/watchlist/:productId — Remove from watchlist (Private) */
+router.delete('/watchlist/:productId', authenticateUser, removeFromWatchlist)
 
 export default router;

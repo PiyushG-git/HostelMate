@@ -5,9 +5,13 @@ const productApiInstance = axios.create({
     withCredentials: true,
 })
 
+const authApiInstance = axios.create({
+    baseURL: "/api/auth",
+    withCredentials: true,
+})
+
 export async function createProduct(formData) {
     const response = await productApiInstance.post("/", formData)
-
     return response.data
 }
 
@@ -16,8 +20,11 @@ export async function getSellerProduct() {
     return response.data
 }
 
-export async function getAllProducts() {
-    const response = await productApiInstance.get("/")
+export async function getAllProducts({ category = '', search = '' } = {}) {
+    const params = {};
+    if (category) params.category = category;
+    if (search) params.search = search;
+    const response = await productApiInstance.get("/", { params })
     return response.data
 }
 
@@ -26,22 +33,34 @@ export async function getProductById(productId) {
     return response.data
 }
 
-export async function addProductVariant(productId, newProductVariant) {
-
-    console.log(newProductVariant)
-
-    const formData = new FormData()
-
-    newProductVariant.images.forEach((image) => {
-        formData.append(`images`, image.file)
-    })
-
-    formData.append("stock", newProductVariant.stock)
-    formData.append("priceAmount", newProductVariant.price)
-    formData.append("attributes", JSON.stringify(newProductVariant.attributes))
-
-    const response = await productApiInstance.post(`/${productId}/variants`, formData)
-
+export async function markProductAsSold(productId) {
+    const response = await productApiInstance.patch(`/${productId}/sold`)
     return response.data
+}
 
+export async function updateProduct(productId, data) {
+    const response = await productApiInstance.put(`/${productId}`, data)
+    return response.data
+}
+
+export async function deleteProduct(productId) {
+    const response = await productApiInstance.delete(`/${productId}`)
+    return response.data
+}
+
+// ── Watchlist ──────────────────────────────────────────────
+
+export async function getWatchlist() {
+    const response = await authApiInstance.get("/watchlist")
+    return response.data
+}
+
+export async function addToWatchlist(productId) {
+    const response = await authApiInstance.post(`/watchlist/${productId}`)
+    return response.data
+}
+
+export async function removeFromWatchlist(productId) {
+    const response = await authApiInstance.delete(`/watchlist/${productId}`)
+    return response.data
 }

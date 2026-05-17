@@ -7,9 +7,9 @@ import Protected from "../features/auth/components/Protected";
 import Home from "../features/products/pages/Home";
 import ProductDetail from "../features/products/pages/ProductDetail";
 import SellerProductDetails from "../features/products/pages/SellerProductDetails";
-import Cart from "../features/cart/pages/Cart";
+import Watchlist from "../features/products/pages/Watchlist";
+import UserProfile from "../features/products/pages/UserProfile";
 import AppLayout from "./Applayout";
-import OrderSuccess from "../features/cart/pages/OrderSuccess";
 
 export const routes = createBrowserRouter([
 
@@ -33,39 +33,35 @@ export const routes = createBrowserRouter([
                 element: <ProductDetail />
             },
             {
-                path: "/cart",
-                element: <Protected> <Cart /></Protected>
+                path: "/post-ad",
+                element: <Protected>
+                    <CreateProduct />
+                </Protected>
             },
             {
-                path: "/order-success",
-                element: <OrderSuccess />
+                path: "/dashboard",
+                element: <Protected>
+                    <Dashboard />
+                </Protected>
             },
             {
-                path: "/seller",
-                children: [
-                    {
-                        path: "/seller/create-product",
-
-                        element: <Protected role="seller" >
-                            <CreateProduct />
-                        </Protected>
-                    },
-                    {
-                        path: "/seller/dashboard",
-                        element: <Protected role="seller" >
-                            <Dashboard />
-                        </Protected>
-                    },
-                    {
-                        path: "/seller/product/:productId",
-                        element: <Protected role="seller" >
-                            <SellerProductDetails />
-                        </Protected>
-                    }
-                ]
+                path: "/dashboard/product/:productId",
+                element: <Protected>
+                    <SellerProductDetails />
+                </Protected>
+            },
+            {
+                path: "/watchlist",
+                element: <Protected>
+                    <Watchlist />
+                </Protected>
+            },
+            {
+                path: "/profile",
+                element: <Protected>
+                    <UserProfile />
+                </Protected>
             }
         ]
     }
-
-
 ])

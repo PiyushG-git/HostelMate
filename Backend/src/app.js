@@ -3,7 +3,6 @@ import cookieParser from "cookie-parser";
 import morgan from "morgan";
 import authRouter from "./routes/auth.routes.js";
 import productRouter from "./routes/product.routes.js";
-import cartRouter from "./routes/cart.routes.js";
 import cors from "cors";
 import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20"
@@ -17,7 +16,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(cors({
     origin: "http://localhost:5173",
-    methods: [ "GET", "POST", "PUT", "DELETE" ],
+    methods: [ "GET", "POST", "PUT", "DELETE", "PATCH" ],
     credentials: true
 }))
 
@@ -38,5 +37,5 @@ app.get("/", (_req, res) => {
 
 app.use("/api/auth", authRouter);
 app.use("/api/products", productRouter);
-app.use("/api/cart", cartRouter);
+
 export default app;

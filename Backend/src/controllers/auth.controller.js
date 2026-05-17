@@ -1,4 +1,5 @@
 import userModel from "../models/user.model.js";
+import productModel from "../models/product.model.js";
 import jwt from "jsonwebtoken"
 import { config } from "../config/config.js";
 import BlacklistedToken from "../models/blacklistedToken.model.js";
@@ -22,7 +23,6 @@ async function sendTokenResponse(user, res, message) {
             email: user.email,
             contact: user.contact,
             fullname: user.fullname,
-            role: user.role
         }
     })
 
@@ -30,13 +30,13 @@ async function sendTokenResponse(user, res, message) {
 
 
 export const register = async (req, res) => {
-    const { email, contact, password, fullname, isSeller } = req.body;
+    const { email, contact, password, fullname } = req.body;
 
     try {
         const existingUser = await userModel.findOne({
             $or: [
                 { email },
-                { contact }
+                ...(contact ? [{ contact }] : [])
             ]
         })
 
@@ -49,7 +49,6 @@ export const register = async (req, res) => {
             contact,
             password,
             fullname,
-            role: isSeller ? "seller" : "buyer"
         })
 
         await sendTokenResponse(user, res, "User registered successfully")
@@ -79,14 +78,10 @@ export const login = async (req, res) => {
 }
 
 export const googleCallback = async (req, res) => {
-    const { id, displayName, emails, photos } = req.user
+    const { id, displayName, emails } = req.user
     const email = emails[ 0 ].value;
-    const profilePic = photos[ 0 ].value;
 
-
-    let user = await userModel.findOne({
-        email
-    })
+    let user = await userModel.findOne({ email })
 
     if (!user) {
         user = await userModel.create({
@@ -96,7 +91,6 @@ export const googleCallback = async (req, res) => {
         })
     }
 
-
     const token = jwt.sign({
         id: user._id,
     }, config.JWT_SECRET, {
@@ -104,7 +98,6 @@ export const googleCallback = async (req, res) => {
     })
 
     res.cookie("token", token)
-
     res.redirect("http://localhost:5173/")
 }
 
@@ -119,7 +112,7 @@ export const getMe = async (req, res) => {
             email: user.email,
             contact: user.contact,
             fullname: user.fullname,
-            role: user.role
+            watchlist: user.watchlist || []
         }
     })
 }
@@ -132,19 +125,71 @@ export const logout = async (req, res) => {
     }
 
     try {
-        // Decode token to get expiry time (without verifying – it's already been verified by middleware)
         const decoded = jwt.decode(token);
         const expiresAt = new Date(decoded.exp * 1000);
 
-        // Save to blacklist
         await BlacklistedToken.create({ token, expiresAt });
 
-        // Clear the cookie
         res.clearCookie("token", { httpOnly: true, sameSite: "lax" });
 
         return res.status(200).json({ message: "Logged out successfully", success: true });
     } catch (error) {
         console.log(error);
         return res.status(500).json({ message: "Server error during logout" });
+    }
+}
+
+// ── Watchlist ──────────────────────────────────────────────
+
+export const addToWatchlist = async (req, res) => {
+    const { productId } = req.params;
+    const userId = req.user._id;
+
+    try {
+        const product = await productModel.findById(productId);
+        if (!product) {
+            return res.status(404).json({ success: false, message: "Product not found" });
+        }
+
+        const user = await userModel.findById(userId);
+        if (user.watchlist.includes(productId)) {
+            return res.status(400).json({ success: false, message: "Already in watchlist" });
+        }
+
+        user.watchlist.push(productId);
+        await user.save();
+
+        return res.status(200).json({ success: true, message: "Added to watchlist", watchlist: user.watchlist });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ success: false, message: "Server error" });
+    }
+}
+
+export const removeFromWatchlist = async (req, res) => {
+    const { productId } = req.params;
+    const userId = req.user._id;
+
+    try {
+        const user = await userModel.findById(userId);
+        user.watchlist = user.watchlist.filter(id => id.toString() !== productId);
+        await user.save();
+
+        return res.status(200).json({ success: true, message: "Removed from watchlist", watchlist: user.watchlist });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ success: false, message: "Server error" });
+    }
+}
+
+export const getWatchlist = async (req, res) => {
+    const userId = req.user._id;
+
+    try {
+        const user = await userModel.findById(userId).populate('watchlist');
+        return res.status(200).json({ success: true, watchlist: user.watchlist });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ success: false, message: "Server error" });
     }
 }

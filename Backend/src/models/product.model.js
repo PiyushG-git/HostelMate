@@ -1,23 +1,23 @@
 import mongoose from 'mongoose';
-import priceSchema from "./price.schema.js";
 
 const productSchema = new mongoose.Schema({
     title: {
         type: String,
-        required: true
+        required: true,
+        trim: true
     },
     description: {
         type: String,
         required: true
     },
-    seller: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'user',
+    price: {
+        type: Number,
         required: true
     },
-    price: {
-        type: priceSchema,
-        required: true
+    category: {
+        type: String,
+        required: true,
+        enum: ['coolers', 'tables', 'chairs', 'cycles', 'books', 'electronics', 'mattresses', 'buckets', 'study lamps', 'extension boards', 'others']
     },
     images: [
         {
@@ -27,32 +27,33 @@ const productSchema = new mongoose.Schema({
             }
         }
     ],
-    variants: [
-        {
-            images: [
-                {
-                    url: {
-                        type: String,
-                        required: true
-                    }
-                }
-            ],
-            stock: {
-                type: Number,
-                default: 0
-            },
-            attributes: {
-                type: Map,
-                of: String
-            },
-            price: {
-                type: priceSchema,
-            }
-        },
-
-    ]
-}, { timestamps: true })
-
+    sellerId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'user',
+        required: true
+    },
+    hostelBlock: {
+        type: String,
+        required: true
+    },
+    sellerYear: {
+        type: String,
+        required: true,
+        enum: ['1st Year', '2nd Year', '3rd Year', '4th Year', 'Alumni']
+    },
+    contactNumber: {
+        type: String,
+        required: true
+    },
+    negotiable: {
+        type: Boolean,
+        default: false
+    },
+    isSold: {
+        type: Boolean,
+        default: false
+    }
+}, { timestamps: true });
 
 const productModel = mongoose.model('product', productSchema);
 

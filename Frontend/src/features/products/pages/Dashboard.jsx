@@ -1,148 +1,209 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useProduct } from '../hooks/useProduct';
 import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router';
 
 const Dashboard = () => {
-    const { handleGetSellerProduct } = useProduct();
+    const { handleGetSellerProduct, handleMarkAsSold, handleDeleteProduct } = useProduct();
     const sellerProducts = useSelector(state => state.product.sellerProducts);
     const navigate = useNavigate();
+    const [loadingProductId, setLoadingProductId] = useState(null);
+    const [deletingProductId, setDeletingProductId] = useState(null);
+    const [activeTab, setActiveTab] = useState('all');
 
     useEffect(() => {
         handleGetSellerProduct();
     }, [handleGetSellerProduct]);
 
+    const onMarkAsSold = async (productId, e) => {
+        e.stopPropagation();
+        if (window.confirm("Mark this item as sold? This action cannot be undone.")) {
+            setLoadingProductId(productId);
+            try {
+                await handleMarkAsSold(productId);
+                await handleGetSellerProduct();
+            } catch (error) {
+                console.error("Failed to mark as sold:", error);
+            } finally {
+                setLoadingProductId(null);
+            }
+        }
+    };
+
+    const onDelete = async (productId, e) => {
+        e.stopPropagation();
+        if (window.confirm("Delete this listing permanently? This cannot be undone.")) {
+            setDeletingProductId(productId);
+            try {
+                await handleDeleteProduct(productId);
+                await handleGetSellerProduct();
+            } catch (error) {
+                console.error("Failed to delete:", error);
+            } finally {
+                setDeletingProductId(null);
+            }
+        }
+    };
+
+    const filtered = activeTab === 'active'
+        ? sellerProducts?.filter(p => !p.isSold)
+        : activeTab === 'sold'
+            ? sellerProducts?.filter(p => p.isSold)
+            : sellerProducts;
+
+    const activeCount = sellerProducts?.filter(p => !p.isSold).length || 0;
+    const soldCount = sellerProducts?.filter(p => p.isSold).length || 0;
+
     return (
-        <>
-            {/* Google Fonts */}
-            <link
-                href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Inter:wght@300;400;500;600&display=swap"
-                rel="stylesheet"
-            />
+        <div className="min-h-screen bg-slate-50 font-['Inter'] pb-24">
+            <div className="max-w-5xl mx-auto px-6 lg:px-12 pt-12">
 
-            <div
-                className="min-h-screen selection:bg-[#C9A96E]/30"
-                style={{ backgroundColor: '#fbf9f6', fontFamily: "'Inter', sans-serif" }}
-            >
-                <div className="max-w-7xl mx-auto px-8 lg:px-16 xl:px-24">
-
-                    {/* ── Top Bar ── */}
-                    <div className="pt-10 pb-0 flex items-center gap-5">
-                        <button
-                            onClick={() => navigate(-1)}
-                            className="text-lg transition-colors duration-200 leading-none"
-                            style={{ color: '#B5ADA3' }}
-                            aria-label="Go back"
-                            onMouseEnter={e => e.currentTarget.style.color = '#C9A96E'}
-                            onMouseLeave={e => e.currentTarget.style.color = '#B5ADA3'}
-                        >
-                            ←
-                        </button>
-                        <span
-                            className="text-xs font-medium tracking-[0.32em] uppercase"
-                            style={{ fontFamily: "'Cormorant Garamond', serif", color: '#C9A96E' }}
-                        >
-                            Snitch.
-                        </span>
+                {/* Header */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-10">
+                    <div>
+                        <h1 className="text-3xl font-bold font-['Plus_Jakarta_Sans'] text-slate-900 mb-1">
+                            My Listings
+                        </h1>
+                        <p className="text-slate-500">Manage your active ads and sold items.</p>
                     </div>
+                    <button
+                        onClick={() => navigate('/post-ad')}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-bold shadow-sm transition-colors whitespace-nowrap"
+                    >
+                        List new Product
+                    </button>
+                </div>
 
-                    {/* ── Page Header ── */}
-                    <div className="pt-10 pb-10 flex flex-col md:flex-row md:items-end justify-between gap-6 overflow-hidden">
-                        <div>
-                            <h1
-                                className="text-4xl lg:text-5xl font-light leading-tight"
-                                style={{ fontFamily: "'Cormorant Garamond', serif", color: '#1b1c1a' }}
-                            >
-                                Your Vault
-                            </h1>
-                            {/* Gold rule separator */}
-                            <div className="mt-4 w-14 h-px" style={{ backgroundColor: '#C9A96E' }} />
-                        </div>
-
-                        <button
-                            onClick={() => navigate('/seller/create-product')}
-                            className="py-4 px-8 text-[11px] uppercase tracking-[0.3em] font-medium transition-all duration-300 w-full md:w-auto text-center"
-                            style={{
-                                backgroundColor: '#1b1c1a',
-                                color: '#fbf9f6',
-                                fontFamily: "'Inter', sans-serif"
-                            }}
-                            onMouseEnter={e => {
-                                e.currentTarget.style.backgroundColor = '#C9A96E';
-                                e.currentTarget.style.color = '#1b1c1a';
-                            }}
-                            onMouseLeave={e => {
-                                e.currentTarget.style.backgroundColor = '#1b1c1a';
-                                e.currentTarget.style.color = '#fbf9f6';
-                            }}
-                        >
-                            New Listing
-                        </button>
+                {/* Stats Row */}
+                <div className="grid grid-cols-3 gap-4 mb-8">
+                    <div className="bg-white border border-slate-200 rounded-2xl p-5 text-center shadow-sm">
+                        <div className="text-3xl font-bold text-slate-900">{sellerProducts?.length || 0}</div>
+                        <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mt-1">Total Ads</div>
                     </div>
+                    <div className="bg-white border border-slate-200 rounded-2xl p-5 text-center shadow-sm">
+                        <div className="text-3xl font-bold text-indigo-600">{activeCount}</div>
+                        <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mt-1">Active</div>
+                    </div>
+                    <div className="bg-white border border-slate-200 rounded-2xl p-5 text-center shadow-sm">
+                        <div className="text-3xl font-bold text-green-600">{soldCount}</div>
+                        <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mt-1">Sold</div>
+                    </div>
+                </div>
 
-                    {/* ── Product Grid ── */}
-                    {sellerProducts && sellerProducts.length > 0 ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-8 gap-y-16 pb-24">
-                            {sellerProducts.map(product => {
-                                const imageUrl = product.images && product.images.length > 0
-                                    ? product.images[ 0 ].url
-                                    : '/snitch_editorial_warm.png'; // Fallback to our warm editorial
+                {/* Tabs */}
+                <div className="flex gap-1 bg-slate-100 p-1 rounded-xl mb-8 w-fit">
+                    {[
+                        { id: 'all', label: `All (${sellerProducts?.length || 0})` },
+                        { id: 'active', label: `Active (${activeCount})` },
+                        { id: 'sold', label: `Sold (${soldCount})` },
+                    ].map(tab => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id)}
+                            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${activeTab === tab.id ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                            {tab.label}
+                        </button>
+                    ))}
+                </div>
 
-                                return (
+                {/* Product Grid */}
+                {filtered && filtered.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                        {filtered.map(product => {
+                            const imageUrl = product.images && product.images.length > 0
+                                ? product.images[0].url
+                                : 'https://via.placeholder.com/400x300?text=No+Image';
+
+                            return (
+                                <div
+                                    key={product._id}
+                                    className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm flex flex-col"
+                                >
                                     <div
-                                        onClick={() => { navigate(`/seller/product/${product._id}`) }}
-                                        key={product._id} className="group cursor-pointer flex flex-col">
-                                        {/* Image Container */}
-                                        <div className="aspect-[4/5] overflow-hidden mb-6" style={{ backgroundColor: '#f5f3f0' }}>
-                                            <img
-                                                src={imageUrl}
-                                                alt={product.title}
-                                                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                                            />
+                                        className="h-44 overflow-hidden relative bg-slate-100 cursor-pointer"
+                                        onClick={() => navigate(`/product/${product._id}`)}
+                                    >
+                                        <img src={imageUrl} alt={product.title} className="w-full h-full object-cover" />
+                                        {product.isSold && (
+                                            <div className="absolute inset-0 bg-white/75 backdrop-blur-sm flex items-center justify-center">
+                                                <span className="bg-red-100 text-red-700 px-4 py-1.5 rounded-full font-bold text-sm border border-red-200">SOLD</span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="p-4 flex-1 flex flex-col">
+                                        <div className="flex justify-between items-start mb-1.5">
+                                            <h3
+                                                className="font-bold text-slate-900 line-clamp-1 flex-1 pr-2 cursor-pointer hover:text-indigo-600"
+                                                onClick={() => navigate(`/product/${product._id}`)}
+                                            >
+                                                {product.title}
+                                            </h3>
+                                            <span className="font-bold text-indigo-600 shrink-0">₹{product.price}</span>
                                         </div>
 
-                                        {/* Product Details */}
-                                        <div className="flex flex-col gap-2">
-                                            <div className="flex items-start justify-between gap-4">
-                                                <h3
-                                                    className="text-xl leading-snug transition-colors duration-300 group-hover:text-[#C9A96E]"
-                                                    style={{ fontFamily: "'Cormorant Garamond', serif", color: '#1b1c1a' }}
-                                                >
-                                                    {product.title}
-                                                </h3>
-                                            </div>
+                                        <div className="flex gap-1.5 text-xs font-medium text-slate-500 mb-4">
+                                            <span className="bg-slate-100 px-2 py-0.5 rounded-md">{product.category}</span>
+                                            <span className="bg-slate-100 px-2 py-0.5 rounded-md">{product.hostelBlock}</span>
+                                        </div>
 
-                                            <p
-                                                className="text-[12px] line-clamp-2 leading-relaxed"
-                                                style={{ color: '#7A6E63' }}
+                                        <div className="mt-auto border-t border-slate-100 pt-3 flex gap-2">
+                                            {!product.isSold ? (
+                                                <button
+                                                    onClick={(e) => onMarkAsSold(product._id, e)}
+                                                    disabled={loadingProductId === product._id}
+                                                    className="flex-1 bg-green-50 text-green-700 hover:bg-green-100 font-bold py-2 rounded-lg transition-colors text-sm border border-green-200"
+                                                >
+                                                    {loadingProductId === product._id ? 'Updating...' : '✓ Mark Sold'}
+                                                </button>
+                                            ) : (
+                                                <div className="flex-1 bg-slate-50 text-slate-400 font-bold py-2 rounded-lg text-center text-sm border border-slate-200">
+                                                    Sold ✓
+                                                </div>
+                                            )}
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); navigate(`/dashboard/product/${product._id}`); }}
+                                                className="px-3 py-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg font-bold text-sm border border-indigo-200 transition-colors"
+                                                title="Edit listing"
                                             >
-                                                {product.description}
-                                            </p>
-
-                                            <div className="mt-2">
-                                                <span
-                                                    className="text-[10px] uppercase tracking-[0.2em] font-medium"
-                                                    style={{ color: '#1b1c1a' }}
-                                                >
-                                                    {product.price?.currency} {product.price?.amount?.toLocaleString()}
-                                                </span>
-                                            </div>
+                                                ✏️
+                                            </button>
+                                            <button
+                                                onClick={(e) => onDelete(product._id, e)}
+                                                disabled={deletingProductId === product._id}
+                                                className="px-3 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg font-bold text-sm border border-red-200 transition-colors"
+                                                title="Delete listing"
+                                            >
+                                                {deletingProductId === product._id ? '...' : '🗑️'}
+                                            </button>
                                         </div>
                                     </div>
-                                );
-                            })}
-                        </div>
-                    ) : (
-                        <div className="py-24 text-center flex flex-col items-center">
-                            <span className="text-[10px] uppercase tracking-[0.2em] font-medium mb-4" style={{ color: '#C9A96E' }}>Empty Vault</span>
-                            <p className="max-w-md mx-auto text-lg leading-relaxed" style={{ fontFamily: "'Cormorant Garamond', serif", color: '#7A6E63' }}>
-                                You haven't added any curated pieces to your archive yet. Begin by creating a new listing.
-                            </p>
-                        </div>
-                    )}
-                </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                ) : (
+                    <div className="bg-white border border-slate-200 rounded-3xl py-24 text-center px-6">
+                        <div className="text-5xl mb-4">📦</div>
+                        <h2 className="text-2xl font-bold font-['Plus_Jakarta_Sans'] text-slate-900 mb-2">
+                            {activeTab === 'sold' ? 'No sold items yet' : 'No listings yet'}
+                        </h2>
+                        <p className="text-slate-500 max-w-md mx-auto mb-8">
+                            {activeTab === 'sold'
+                                ? 'Items you mark as sold will appear here.'
+                                : 'Turn your unused hostel items into cash by posting an ad.'}
+                        </p>
+                        <button
+                            onClick={() => navigate('/post-ad')}
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-xl font-bold shadow-sm transition-colors"
+                        >
+                            List your first Product
+                        </button>
+                    </div>
+                )}
             </div>
-        </>
+        </div>
     );
 };
 

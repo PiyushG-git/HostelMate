@@ -1,64 +1,23 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { useParams, Link, useNavigate } from 'react-router';
-import { useSelector } from 'react-redux';
+import React, { useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router';
 import { useProduct } from '../hooks/useProduct';
-import { useCart } from '../../cart/hook/useCart';
+import { useSelector } from 'react-redux';
 
 const ProductDetail = () => {
     const { productId } = useParams();
     const [ product, setProduct ] = useState(null);
     const [ selectedImage, setSelectedImage ] = useState(0);
-    const [ selectedAttributes, setSelectedAttributes ] = useState({});
-    const { handleGetProductById } = useProduct();
-    const { handleAddItem, handleIncrementCartItem, handleDecrementCartItem } = useCart()
+    const [ watchlistLoading, setWatchlistLoading ] = useState(false);
+    const { handleGetProductById, handleAddToWatchlist, handleRemoveFromWatchlist } = useProduct();
     const navigate = useNavigate();
-    const cart = useSelector(state => state.cart);
-
-    const onAddToCart = async () => {
-        if (!product) return;
-        if (!activeVariant) {
-            alert("Please select available options before adding to cart.");
-            return;
-        }
-        try {
-            await handleAddItem({
-                productId: product._id,
-                variantId: activeVariant._id
-            });
-        } catch (error) {
-            console.error(error);
-        }
-    };
-
-    const onBuyNow = async () => {
-        if (!product) return;
-        if (!activeVariant) {
-            alert("Please select available options before proceeding.");
-            return;
-        }
-        try {
-            await handleAddItem({
-                productId: product._id,
-                variantId: activeVariant._id
-            });
-            navigate("/cart");
-        } catch (error) {
-            console.error(error);
-        }
-    };
-
-
-
+    const user = useSelector(state => state.auth.user);
+    const watchlist = useSelector(state => state.product.watchlist);
 
     useEffect(() => {
         async function fetchProductDetails() {
             try {
                 const data = await handleGetProductById(productId);
-                const fetchedProduct = data?.product || data;
-                setProduct(fetchedProduct);
-                if (fetchedProduct?.variants?.length > 0) {
-                    setSelectedAttributes(fetchedProduct.variants[ 0 ].attributes || {});
-                }
+                setProduct(data);
             } catch (error) {
                 console.error("Failed to fetch product details", error);
             }
@@ -66,326 +25,162 @@ const ProductDetail = () => {
         fetchProductDetails();
     }, [ productId, handleGetProductById ]);
 
-    const activeVariant = useMemo(() => {
-        if (!product?.variants || product.variants.length === 0) return null;
-
-        const match = product.variants.find(v => {
-            if (!v.attributes) return false;
-            const vKeys = Object.keys(v.attributes);
-            const sKeys = Object.keys(selectedAttributes);
-            const isMatch = vKeys.every(k => v.attributes[ k ] === selectedAttributes[ k ]);
-            return vKeys.length === sKeys.length && isMatch;
-        });
-
-        return match || product.variants[0];
-    }, [ product, selectedAttributes ]);
-
-    const cartItem = useMemo(() => {
-        if (!product || !cart?.items) return null;
-        return cart.items.find(item => 
-            (item.product?._id === product._id || item.product === product._id) && 
-            (activeVariant ? item.variant === activeVariant._id : !item.variant)
-        );
-    }, [product, activeVariant, cart]);
-
-    console.log({ product, activeVariant })
-
-    const availableAttributes = useMemo(() => {
-        if (!product?.variants) return {};
-        const attrs = {};
-        product.variants.forEach(variant => {
-            if (variant.attributes) {
-                Object.entries(variant.attributes).forEach(([ key, value ]) => {
-                    if (!attrs[ key ]) attrs[ key ] = new Set();
-                    attrs[ key ].add(value);
-                });
-            }
-        });
-        Object.keys(attrs).forEach(key => {
-            attrs[ key ] = Array.from(attrs[ key ]);
-        });
-        return attrs;
-    }, [ product ]);
-
-
-
-    const handleAttributeChange = (attrName, value) => {
-        const newAttrs = { ...selectedAttributes, [ attrName ]: value };
-
-        // Find if an exact match exists for this combination
-        const exactMatch = product.variants.find(v => {
-            const vAttrs = v.attributes || {};
-            return Object.keys(newAttrs).every(k => newAttrs[ k ] === vAttrs[ k ]) &&
-                Object.keys(vAttrs).every(k => newAttrs[ k ] === vAttrs[ k ]);
-        });
-
-        if (exactMatch) {
-            setSelectedAttributes(exactMatch.attributes);
-        } else {
-            // Find any variant that has this newly selected attribute to fallback nicely
-            const fallbackVariant = product.variants.find(v => v.attributes && v.attributes[ attrName ] === value);
-            if (fallbackVariant) {
-                setSelectedAttributes(fallbackVariant.attributes);
-            } else {
-                setSelectedAttributes(newAttrs);
-            }
-        }
-        setSelectedImage(0);
-    };
-
     if (!product) {
         return (
-            <div className="min-h-screen flex items-center justify-center selection:bg-[#C9A96E]/30" style={{ backgroundColor: '#fbf9f6' }}>
-                <p style={{ fontFamily: "'Inter', sans-serif", color: '#B5ADA3' }} className="text-[10px] uppercase tracking-[0.2em] font-medium animate-pulse">
-                    Retrieving piece...
-                </p>
+            <div className="min-h-screen flex items-center justify-center bg-slate-50">
+                <div className="animate-spin rounded-full h-12 w-12 border-4 border-indigo-200 border-t-indigo-600"></div>
             </div>
         );
     }
 
-    console.log(product)
+    const displayImages = product.images && product.images.length > 0 ? product.images : [{ url: 'https://via.placeholder.com/600x600?text=No+Image' }];
 
-    // Fallbacks
-    const displayImages = (activeVariant?.images && activeVariant.images.length > 0)
-        ? activeVariant.images
-        : (product.images && product.images.length > 0 ? product.images : [ { url: '/snitch_editorial_warm.png' } ]);
+    const isInWatchlist = watchlist && watchlist.some(w => (w._id || w) === productId);
 
-    const displayPrice = activeVariant?.price?.amount
-        ? activeVariant.price
-        : product.price;
+    const handleContactSeller = () => {
+        if (!product.contactNumber) {
+            alert('Contact number not available.');
+            return;
+        }
+        const message = `Hi! I'm interested in your ad "${product.title}" listed on HostelMart for ₹${product.price}. Is it still available?`;
+        const whatsappUrl = `https://wa.me/91${product.contactNumber}?text=${encodeURIComponent(message)}`;
+        window.open(whatsappUrl, '_blank');
+    };
+
+    const handleToggleWatchlist = async () => {
+        if (!user) {
+            navigate('/login');
+            return;
+        }
+        setWatchlistLoading(true);
+        try {
+            if (isInWatchlist) {
+                await handleRemoveFromWatchlist(productId);
+            } else {
+                await handleAddToWatchlist(productId);
+            }
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setWatchlistLoading(false);
+        }
+    };
 
     return (
-        <>
-            {/* Google Fonts */}
-            <link
-                href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Inter:wght@300;400;500;600&display=swap"
-                rel="stylesheet"
-            />
+        <div className="min-h-screen bg-slate-50 font-['Inter'] pb-24">
+            <div className="max-w-6xl mx-auto px-6 py-8">
+                
+                {/* Back Button */}
+                <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 transition-colors mb-8 font-medium">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                    Back to Feed
+                </button>
 
-            <div
-                className="min-h-screen selection:bg-[#C9A96E]/30 pb-24"
-                style={{ backgroundColor: '#fbf9f6', fontFamily: "'Inter', sans-serif" }}
-            >
-
-                <div className="max-w-7xl mx-auto px-8 lg:px-16 xl:px-24 pt-12 lg:pt-20">
-                    <div className="flex flex-col lg:flex-row gap-12 lg:gap-24 items-start">
-
-                        {/* ── LEFT: Image Gallery ── */}
-                        <div className="w-full lg:w-[70%] flex flex-col-reverse md:flex-row gap-4 lg:gap-6">
-
-                            {/* Thumbnails (Vertical on Desktop, Horizontal on Mobile) */}
-                            {displayImages.length > 1 && (
-                                <div className="flex flex-row md:flex-col gap-4 overflow-x-auto md:overflow-y-auto pb-2 md:pb-0 scrollbar-hide w-full md:w-20 lg:w-24 flex-shrink-0 md:max-h-[calc(100vh-200px)]">
-                                    {displayImages.map((img, idx) => (
-                                        <button
-                                            key={idx}
-                                            onClick={() => setSelectedImage(idx)}
-                                            className={`flex-shrink-0 w-20 md:w-full aspect-[4/5] overflow-hidden transition-all duration-300 ${selectedImage === idx ? 'opacity-100 ring-1 ring-[#C9A96E] ring-offset-2' : 'opacity-50 hover:opacity-100'}`}
-                                            style={{ backgroundColor: '#f5f3f0', '--tw-ring-offset-color': '#fbf9f6' }}
-                                        >
-                                            <img
-
-                                                src={img.url} alt={`View ${idx + 1}`} className="w-full h-full object-cover" />
-                                        </button>
-                                    ))}
+                <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col md:flex-row">
+                    
+                    {/* ── LEFT: Image Gallery ── */}
+                    <div className="w-full md:w-1/2 p-6 md:p-8 md:border-r border-slate-200 bg-slate-50 flex flex-col items-center">
+                        <div className="w-full aspect-square rounded-2xl overflow-hidden bg-white border border-slate-200 relative shadow-sm">
+                            <img
+                                src={displayImages[selectedImage]?.url}
+                                alt={product.title}
+                                className="w-full h-full object-contain p-4"
+                            />
+                            {product.isSold && (
+                                <div className="absolute inset-0 bg-white/70 backdrop-blur-sm flex items-center justify-center">
+                                    <span className="bg-red-100 text-red-800 px-6 py-3 rounded-full font-bold text-xl shadow-sm border border-red-200">SOLD OUT</span>
                                 </div>
                             )}
-
-                            {/* Main Image */}
-                            <div className="relative w-full aspect-4/5 overflow-hidden group" style={{ backgroundColor: '#f5f3f0' }}>
-                                <img
-                                    src={displayImages[ selectedImage ]?.url || displayImages[ 0 ].url}
-                                    alt={product.title}
-                                    className="w-full h-full object-cover transition-opacity duration-500"
-
-                                />
-                                {displayImages.length > 1 && (
-                                    <>
-                                        <button
-                                            onClick={() => setSelectedImage(prev => prev === 0 ? displayImages.length - 1 : prev - 1)}
-                                            className="absolute left-4 lg:left-6 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 border"
-                                            style={{ backgroundColor: 'rgba(251,249,246,0.8)', borderColor: '#e4e2df', color: '#1b1c1a' }}
-                                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#fbf9f6'}
-                                            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'rgba(251,249,246,0.8)'}
-                                            aria-label="Previous image"
-                                        >
-                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.2" d="M15 19l-7-7 7-7" /></svg>
-                                        </button>
-                                        <button
-                                            onClick={() => setSelectedImage(prev => prev === displayImages.length - 1 ? 0 : prev + 1)}
-                                            className="absolute right-4 lg:right-6 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 border"
-                                            style={{ backgroundColor: 'rgba(251,249,246,0.8)', borderColor: '#e4e2df', color: '#1b1c1a' }}
-                                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#fbf9f6'}
-                                            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'rgba(251,249,246,0.8)'}
-                                            aria-label="Next image"
-                                        >
-                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.2" d="M9 5l7 7-7 7" /></svg>
-                                        </button>
-                                    </>
-                                )}
-                            </div>
                         </div>
-
-                        {/* ── RIGHT: Product Details ── */}
-                        <div className="w-full lg:w-[30%] lg:sticky lg:top-24 flex flex-col pt-4">
-
-                            <h1
-                                className="text-4xl md:text-5xl lg:text-6xl font-light leading-[1.05] mb-6"
-                                style={{ fontFamily: "'Cormorant Garamond', serif", color: '#1b1c1a' }}
-                            >
-                                {product.title}
-                            </h1>
-
-                            <div className="mb-8">
-                                <span
-                                    className="text-sm uppercase tracking-[0.2em] font-medium"
-                                    style={{ color: '#1b1c1a' }}
-                                >
-                                    {displayPrice?.currency} {displayPrice?.amount?.toLocaleString()}
-                                </span>
-                            </div>
-
-                            <div className="h-px w-full mb-8" style={{ backgroundColor: '#e4e2df' }} />
-
-                            {/* Options/Variants */}
-                            {Object.entries(availableAttributes).map(([ attrName, values ]) => (
-                                <div key={attrName} className="mb-6">
-                                    <h3 className="text-[10px] uppercase tracking-[0.24em] font-medium mb-3" style={{ color: '#C9A96E' }}>
-                                        {attrName}
-                                    </h3>
-                                    <div className="flex flex-wrap gap-2">
-                                        {values.map(val => {
-                                            const isSelected = selectedAttributes[ attrName ] === val;
-                                            return (
-                                                <button
-                                                    key={val}
-                                                    onClick={() => handleAttributeChange(attrName, val)}
-                                                    className={`px-4 py-2 text-[11px] uppercase tracking-[0.15em] font-medium transition-all duration-300 border ${isSelected ? 'border-[#1b1c1a] bg-[#1b1c1a] text-[#fbf9f6]' : 'border-[#d0c5b5] text-[#1b1c1a] hover:border-[#1b1c1a]'}`}
-                                                    style={isSelected ? {} : { backgroundColor: 'transparent' }}
-                                                >
-                                                    {val}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            ))}
-
-                            {/* Stock Information */}
-                            {activeVariant && activeVariant.stock !== undefined && (
-                                <div className="mb-6">
-                                    <span className={`text-[10px] uppercase tracking-[0.2em] font-medium ${activeVariant.stock > 0 ? 'text-green-700' : 'text-red-700'}`}>
-                                        {activeVariant.stock > 0 ? `${activeVariant.stock} in stock` : 'Out of stock'}
-                                    </span>
-                                </div>
-                            )}
-
-                            <div className="mb-12">
-                                <h3 className="text-[10px] uppercase tracking-[0.24em] font-medium mb-4" style={{ color: '#C9A96E' }}>
-                                    The Details
-                                </h3>
-                                <p className="text-sm leading-relaxed" style={{ color: '#7A6E63' }}>
-                                    {product.description}
-                                </p>
-                            </div>
-
-                            {/* Actions */}
-                            <div className="flex flex-col gap-4 mt-auto">
-                                {cartItem ? (
-                                    <div
-                                        className="w-full flex items-center justify-between"
-                                        style={{ border: `1px solid #1b1c1a` }}
-                                    >
-                                        <button
-                                            onClick={() => handleDecrementCartItem({ productId: product._id, variantId: activeVariant?._id })}
-                                            className="w-12 h-12 flex items-center justify-center text-lg font-light transition-colors hover:opacity-60"
-                                            style={{ color: '#1b1c1a', borderRight: `1px solid #1b1c1a` }}
-                                            aria-label="Decrease quantity"
-                                        >
-                                            −
-                                        </button>
-                                        <span
-                                            className="flex-1 text-center text-[11px] tracking-[0.25em] font-medium select-none"
-                                            style={{ color: '#1b1c1a' }}
-                                        >
-                                            {cartItem.quantity} IN CART
-                                        </span>
-                                        <button
-                                            onClick={() => handleIncrementCartItem({ productId: product._id, variantId: activeVariant?._id })}
-                                            className="w-12 h-12 flex items-center justify-center text-lg font-light transition-colors hover:opacity-60"
-                                            style={{ color: '#1b1c1a', borderLeft: `1px solid #1b1c1a` }}
-                                            aria-label="Increase quantity"
-                                        >
-                                            +
-                                        </button>
-                                    </div>
-                                ) : (
+                        
+                        {/* Thumbnails */}
+                        {displayImages.length > 1 && (
+                            <div className="flex gap-4 mt-6 overflow-x-auto w-full pb-2 scrollbar-hide">
+                                {displayImages.map((img, idx) => (
                                     <button
-                                        className={`w-full py-4 text-[11px] uppercase tracking-[0.25em] font-medium transition-all duration-300 ${!activeVariant ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                        style={{
-                                            backgroundColor: '#1b1c1a',
-                                            color: '#fbf9f6',
-                                            fontFamily: "'Inter', sans-serif"
-                                        }}
-                                        onMouseEnter={e => {
-                                            if (activeVariant) {
-                                                e.currentTarget.style.backgroundColor = '#C9A96E';
-                                                e.currentTarget.style.color = '#1b1c1a';
-                                            }
-                                        }}
-                                        onMouseLeave={e => {
-                                            if (activeVariant) {
-                                                e.currentTarget.style.backgroundColor = '#1b1c1a';
-                                                e.currentTarget.style.color = '#fbf9f6';
-                                            }
-                                        }}
-                                        onClick={onAddToCart}
+                                        key={idx}
+                                        onClick={() => setSelectedImage(idx)}
+                                        className={`flex-shrink-0 w-20 h-20 rounded-xl overflow-hidden border-2 transition-all ${selectedImage === idx ? 'border-indigo-600 shadow-md' : 'border-transparent opacity-70 hover:opacity-100'}`}
                                     >
-                                        Add to Cart
+                                        <img src={img.url} alt={`View ${idx + 1}`} className="w-full h-full object-cover" />
                                     </button>
-                                )}
-
-                                <button
-                                    className={`w-full py-4 text-[11px] uppercase tracking-[0.25em] font-medium transition-all duration-300 border ${!activeVariant ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                    style={{
-                                        backgroundColor: 'transparent',
-                                        borderColor: '#d0c5b5',
-                                        color: '#1b1c1a',
-                                        fontFamily: "'Inter', sans-serif"
-                                    }}
-                                    onMouseEnter={e => {
-                                        e.currentTarget.style.borderColor = '#C9A96E';
-                                    }}
-                                    onMouseLeave={e => {
-                                        e.currentTarget.style.borderColor = '#d0c5b5';
-                                    }}
-                                    onClick={onBuyNow}
-                                >
-                                    Buy Now
-                                </button>
+                                ))}
                             </div>
+                        )}
+                    </div>
 
-                            {/* Extra elegant details */}
-                            <div className="mt-14 space-y-4 text-[10px] uppercase tracking-[0.1em]" style={{ color: '#B5ADA3' }}>
-                                <div className="flex justify-between border-b pb-3" style={{ borderColor: '#e4e2df' }}>
-                                    <span>Shipping</span>
-                                    <span>Complimentary over INR 15,000</span>
-                                </div>
-                                <div className="flex justify-between border-b pb-3" style={{ borderColor: '#e4e2df' }}>
-                                    <span>Returns</span>
-                                    <span>Within 14 days of delivery</span>
-                                </div>
-                                <div className="flex justify-between border-b pb-3" style={{ borderColor: '#e4e2df' }}>
-                                    <span>Authenticity</span>
-                                    <span>100% Guaranteed</span>
-                                </div>
-                            </div>
-
+                    {/* ── RIGHT: Product Details ── */}
+                    <div className="w-full md:w-1/2 p-6 md:p-10 flex flex-col">
+                        
+                        <div className="mb-2 flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                            <span className="bg-slate-100 px-3 py-1 rounded-full">{product.category}</span>
+                            {product.negotiable && <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full">Negotiable</span>}
                         </div>
+
+                        <h1 className="text-3xl md:text-4xl font-bold font-['Plus_Jakarta_Sans'] text-slate-900 mb-4 leading-tight">
+                            {product.title}
+                        </h1>
+
+                        <div className="text-4xl font-bold text-indigo-600 mb-8 font-['Plus_Jakarta_Sans']">
+                            ₹{product.price}
+                        </div>
+
+                        {/* Seller Metadata Bento Box */}
+                        <div className="grid grid-cols-2 gap-4 mb-8">
+                            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200">
+                                <span className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Hostel Block</span>
+                                <span className="font-bold text-slate-900">{product.hostelBlock}</span>
+                            </div>
+                            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200">
+                                <span className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Seller Year</span>
+                                <span className="font-bold text-slate-900">{product.sellerYear}</span>
+                            </div>
+                            {product.sellerId?.fullname && (
+                                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 col-span-2">
+                                    <span className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Listed by</span>
+                                    <span className="font-bold text-slate-900">{product.sellerId.fullname}</span>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Description */}
+                        <div className="mb-8 flex-1">
+                            <h3 className="text-lg font-bold text-slate-900 mb-3 font-['Plus_Jakarta_Sans']">Description</h3>
+                            <p className="text-slate-600 leading-relaxed whitespace-pre-line">
+                                {product.description}
+                            </p>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="mt-auto flex flex-col gap-3">
+                            <button
+                                onClick={handleContactSeller}
+                                disabled={product.isSold}
+                                className={`w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-colors shadow-sm ${product.isSold ? 'bg-slate-200 text-slate-500 cursor-not-allowed' : 'bg-[#25D366] hover:bg-[#128C7E] text-white'}`}
+                            >
+                                {!product.isSold && (
+                                    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                                )}
+                                {product.isSold ? 'Item Sold' : 'Contact on WhatsApp'}
+                            </button>
+
+                            <button
+                                onClick={handleToggleWatchlist}
+                                disabled={watchlistLoading}
+                                className={`w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 border transition-colors ${
+                                    isInWatchlist
+                                        ? 'bg-indigo-50 border-indigo-300 text-indigo-700 hover:bg-indigo-100'
+                                        : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-600'
+                                }`}
+                            >
+                                {watchlistLoading ? '...' : isInWatchlist ? '🔖 Saved to Watchlist' : '🔖 Save to Watchlist'}
+                            </button>
+                        </div>
+
                     </div>
                 </div>
             </div>
-        </>
+        </div>
     );
 };
 

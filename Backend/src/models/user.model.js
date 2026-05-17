@@ -11,15 +11,16 @@ const userSchema = new mongoose.Schema({
         }
     },
     fullname: { type: String, required: true },
-    role: {
-        type: String,
-        enum: [ "buyer", "seller" ],
-        default: "buyer"
-    },
     googleId: {
         type: String,
-    }
-})
+    },
+    watchlist: [
+        {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'product'
+        }
+    ]
+}, { timestamps: true })
 
 userSchema.pre("save", async function () {
     if (!this.isModified("password")) return;

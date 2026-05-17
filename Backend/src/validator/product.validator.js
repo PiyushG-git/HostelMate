@@ -13,7 +13,10 @@ function validateRequest(req, res, next) {
 export const createProductValidator = [
     body("title").notEmpty().withMessage("Title is required"),
     body("description").notEmpty().withMessage("Description is required"),
-    body("priceAmount").isNumeric().withMessage("Price amount must be a number"),
-    body("priceCurrency").notEmpty().withMessage("Price currency is required"),
+    body("price").isNumeric().withMessage("Price amount must be a number"),
+    body("category").notEmpty().withMessage("Category is required"),
+    body("hostelBlock").notEmpty().withMessage("Hostel block is required"),
+    body("sellerYear").notEmpty().withMessage("Seller year is required"),
+    body("contactNumber").notEmpty().withMessage("Contact number is required"),
     validateRequest
 ]
